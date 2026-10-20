@@ -11,8 +11,8 @@ class AppointmentSlot(db.Model):
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
     status = db.Column(db.String(20), nullable=False, default='AVAILABLE', index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Relationships
     bookings = db.relationship('Booking', backref='slot', lazy=True, cascade='all, delete-orphan')
@@ -43,8 +43,8 @@ class Booking(db.Model):
     customer_email = db.Column(db.String(150), nullable=True)
     customer_phone = db.Column(db.String(30), nullable=True)
     booking_status = db.Column(db.String(20), nullable=False, default='CONFIRMED', index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     def to_dict(self):
         data = {

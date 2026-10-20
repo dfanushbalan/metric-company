@@ -92,7 +92,7 @@ def create_app():
 
         return jsonify({
             'status': 'healthy',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now().isoformat(),
             'database': db_engine,
             'message': 'Appointment Slot Booker API is running'
         }), 200

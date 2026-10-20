@@ -12,13 +12,16 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'appointment-slot-booker-secret-key-2025')
     JSON_SORT_KEYS = False
 
-    DB_TYPE = os.getenv('DB_TYPE', 'mysql').lower()
+    # If running on Render/cloud and no DATABASE_URL or external DB_HOST is provided, default to sqlite
+    _default_db_type = 'sqlite' if (os.getenv('RENDER') and not os.getenv('DATABASE_URL') and not os.getenv('DB_HOST')) else 'mysql'
+    DB_TYPE = os.getenv('DB_TYPE', _default_db_type).lower()
     DB_HOST = os.getenv('DB_HOST', 'localhost')
     DB_PORT = os.getenv('DB_PORT', '3306')
     DB_USER = os.getenv('DB_USER', 'root')
     DB_PASSWORD = os.getenv('DB_PASSWORD', '')
     DB_NAME = os.getenv('DB_NAME', 'appointment_db')
     AUTO_FALLBACK_SQLITE = os.getenv('AUTO_FALLBACK_SQLITE', 'True').lower() in ('true', '1', 'yes')
+
 
     @classmethod
     def get_database_uri(cls):
@@ -58,16 +61,16 @@ class Config:
                 logger.info(f"Connected to MySQL on {cls.DB_HOST}:{cls.DB_PORT}, using database '{cls.DB_NAME}'.")
                 return mysql_uri
             except Exception as e:
-                logger.warning(f"Could not connect to MySQL server ({e}).")
                 if cls.AUTO_FALLBACK_SQLITE:
                     sqlite_path = os.path.join(os.path.dirname(__file__), 'appointment_booker.db')
-                    logger.info(f"Falling back to local SQLite database at: {sqlite_path}")
+                    logger.info(f"Using local SQLite database: {sqlite_path}")
                     return f"sqlite:///{sqlite_path}"
                 else:
-                    logger.error("AUTO_FALLBACK_SQLITE is disabled; returning MySQL URI despite connection error.")
+                    logger.error(f"Could not connect to MySQL server ({e}) and AUTO_FALLBACK_SQLITE is disabled.")
                     return mysql_uri
         else:
             sqlite_path = os.path.join(os.path.dirname(__file__), 'appointment_booker.db')
+            logger.info(f"Using SQLite database: {sqlite_path}")
             return f"sqlite:///{sqlite_path}"
 
     SQLALCHEMY_TRACK_MODIFICATIONS = False
