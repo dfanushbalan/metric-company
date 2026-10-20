@@ -1,10 +1,16 @@
 import os
+import sys
 import logging
 from datetime import datetime, date, time, timedelta
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from sqlalchemy import or_, and_
 from sqlalchemy.exc import IntegrityError
+
+# Ensure backend directory is in sys.path so config and models resolve seamlessly in any runner
+_backend_dir = os.path.dirname(os.path.abspath(__file__))
+if _backend_dir not in sys.path:
+    sys.path.insert(0, _backend_dir)
 
 from config import Config, logger
 from models import db, AppointmentSlot, Booking

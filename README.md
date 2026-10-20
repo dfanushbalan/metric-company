@@ -288,3 +288,16 @@ Total Requests: 10
     "message": "Booking #1 has been cancelled successfully. Slot #1 is now available for new bookings."
   }
   ```
+
+---
+
+## 🌐 Deployment (Frontend & Backend)
+
+The project includes production-ready configuration for both **unified** (Render, Railway, Fly.io, Docker) and **separated** (Vercel/Netlify + Render API) deployments:
+
+- **1-Click Render Deployment**: Uses [render.yaml](file:///c:/Users/gowth/OneDrive/Desktop/project/render.yaml) & [Procfile](file:///c:/Users/gowth/OneDrive/Desktop/project/Procfile).
+- **Separated Frontend Hosting**: Uses [vercel.json](file:///c:/Users/gowth/OneDrive/Desktop/project/vercel.json) & [netlify.toml](file:///c:/Users/gowth/OneDrive/Desktop/project/netlify.toml).
+- **Container Deployment**: Uses [Dockerfile](file:///c:/Users/gowth/OneDrive/Desktop/project/Dockerfile) & [docker-compose.yml](file:///c:/Users/gowth/OneDrive/Desktop/project/docker-compose.yml).
+
+👉 For complete step-by-step guides, refer to [DEPLOYMENT.md](file:///c:/Users/gowth/OneDrive/Desktop/project/DEPLOYMENT.md).
+

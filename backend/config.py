@@ -22,10 +22,18 @@ class Config:
 
     @classmethod
     def get_database_uri(cls):
-        # Allow explicit DATABASE_URL override
+        # Allow explicit DATABASE_URL override (e.g., from Render, Railway, Supabase, Neon)
         explicit_url = os.getenv('DATABASE_URL')
         if explicit_url:
+            # SQLAlchemy 1.4+ requires postgresql:// instead of postgres://
+            if explicit_url.startswith('postgres://'):
+                explicit_url = explicit_url.replace('postgres://', 'postgresql://', 1)
+            # Ensure pymysql dialect is specified for mysql:// URLs
+            elif explicit_url.startswith('mysql://'):
+                explicit_url = explicit_url.replace('mysql://', 'mysql+pymysql://', 1)
+            logger.info("Using DATABASE_URL from environment.")
             return explicit_url
+
 
         if cls.DB_TYPE == 'mysql':
             # Attempt MySQL connection string

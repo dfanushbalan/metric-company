@@ -4,10 +4,42 @@
  * and double-booking conflict mitigation.
  */
 
-// Dynamic API Base URL determination (supports direct Flask serving or standalone dev server)
-const API_BASE = window.location.origin.includes('http') && !window.location.origin.includes(':3000') && !window.location.origin.includes(':5500')
-  ? window.location.origin
-  : 'http://127.0.0.1:5000';
+// Dynamic API Base URL determination (supports Unified Flask serving, Separated Vercel/Netlify, or local dev)
+function getApiBase() {
+  // 1. Explicit window.BACKEND_API_URL set in config.js
+  if (window.BACKEND_API_URL && typeof window.BACKEND_API_URL === 'string' && window.BACKEND_API_URL.trim() !== '') {
+    return window.BACKEND_API_URL.trim().replace(/\/+$/, '');
+  }
+  // 2. URL search param: ?api=https://...
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const queryApi = params.get('api');
+    if (queryApi) {
+      localStorage.setItem('SLOT_BOOKER_API_BASE', queryApi.trim().replace(/\/+$/, ''));
+      return queryApi.trim().replace(/\/+$/, '');
+    }
+  } catch (e) {}
+
+  // 3. User customized in localStorage
+  try {
+    const saved = localStorage.getItem('SLOT_BOOKER_API_BASE');
+    if (saved && saved.trim() !== '') {
+      return saved.trim().replace(/\/+$/, '');
+    }
+  } catch (e) {}
+
+  // 4. Standalone development / local preview static servers
+  const origin = window.location.origin;
+  if (!origin || origin.startsWith('file:') || origin.includes(':3000') || origin.includes(':5500') || origin.includes(':5173') || origin.includes(':8080')) {
+    return 'http://127.0.0.1:5000';
+  }
+
+  // 5. Default: same origin (unified Flask production deployment or reverse proxy)
+  return origin;
+}
+
+let API_BASE = getApiBase();
+
 
 // Application State
 const state = {
@@ -54,6 +86,9 @@ function initDOMReferences() {
   // Modals
   window.modalBooking = document.getElementById('modal-booking');
   window.modalCancel = document.getElementById('modal-cancel-confirm');
+  window.modalApi = document.getElementById('modal-api-settings');
+  window.inputApiUrl = document.getElementById('input-api-url');
+  window.apiTestStatus = document.getElementById('api-test-status');
 }
 
 function initEventListeners() {
@@ -70,6 +105,68 @@ function initEventListeners() {
     refreshAllData();
     showToast('Data refreshed successfully', 'info');
   });
+
+  // API Settings Modal
+  const btnApiSettings = document.getElementById('btn-api-settings');
+  if (btnApiSettings) {
+    btnApiSettings.addEventListener('click', () => {
+      if (window.inputApiUrl) {
+        window.inputApiUrl.value = localStorage.getItem('SLOT_BOOKER_API_BASE') || window.BACKEND_API_URL || '';
+      }
+      if (window.apiTestStatus) {
+        window.apiTestStatus.textContent = `Current Active Server: ${API_BASE}`;
+        window.apiTestStatus.style.color = 'var(--text-muted)';
+      }
+      if (window.modalApi) window.modalApi.classList.add('active');
+    });
+  }
+
+  const btnCloseApiModal = document.getElementById('btn-close-api-modal');
+  if (btnCloseApiModal) {
+    btnCloseApiModal.addEventListener('click', () => {
+      if (window.modalApi) window.modalApi.classList.remove('active');
+    });
+  }
+
+  const btnTestApi = document.getElementById('btn-test-api');
+  if (btnTestApi) {
+    btnTestApi.addEventListener('click', async () => {
+      const targetUrl = (window.inputApiUrl.value.trim() || window.location.origin).replace(/\/+$/, '');
+      window.apiTestStatus.textContent = 'Testing connection...';
+      window.apiTestStatus.style.color = 'var(--text-muted)';
+      try {
+        const res = await fetch(`${targetUrl}/api/health`, { method: 'GET' });
+        if (res.ok) {
+          const data = await res.json();
+          window.apiTestStatus.textContent = `Connected! (${data.database || 'Database OK'})`;
+          window.apiTestStatus.style.color = 'var(--status-available)';
+        } else {
+          window.apiTestStatus.textContent = `Server responded with status ${res.status}`;
+          window.apiTestStatus.style.color = 'var(--status-error)';
+        }
+      } catch (err) {
+        window.apiTestStatus.textContent = `Failed to connect: ${err.message}`;
+        window.apiTestStatus.style.color = 'var(--status-error)';
+      }
+    });
+  }
+
+  const btnSaveApi = document.getElementById('btn-save-api');
+  if (btnSaveApi) {
+    btnSaveApi.addEventListener('click', () => {
+      const newUrl = window.inputApiUrl.value.trim().replace(/\/+$/, '');
+      if (newUrl) {
+        localStorage.setItem('SLOT_BOOKER_API_BASE', newUrl);
+      } else {
+        localStorage.removeItem('SLOT_BOOKER_API_BASE');
+      }
+      API_BASE = getApiBase();
+      if (window.modalApi) window.modalApi.classList.remove('active');
+      showToast(`Connected to API: ${API_BASE}`, 'success');
+      checkSystemHealth();
+      refreshAllData();
+    });
+  }
 
   // Date Filters
   const dateInput = document.getElementById('filter-date-input');
