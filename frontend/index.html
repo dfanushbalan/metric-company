@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Appointment Slot Booker | High-Concurrency Safe</title>
+  <meta name="description" content="View available appointment slots, book reservations, and prevent double-booking with atomic database row-level locking.">
+  
+  <!-- Modern Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Header Section -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-icon">📅</div>
+        <div>
+          <h1 class="brand-title">Appointment Slot Booker</h1>
+          <p class="brand-subtitle">Reserve appointment slots with strict double-booking prevention</p>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div class="status-indicator" id="system-status-pill">
+          <span class="status-dot" id="system-status-dot"></span>
+          <span id="system-status-text">Checking API...</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btn-refresh-all" title="Refresh all data">
+          🔄 Refresh
+        </button>
+      </div>
+    </header>
+
+    <!-- Metrics Grid -->
+    <section class="metrics-grid" aria-label="System Metrics">
+      <div class="metric-card">
+        <div class="metric-label">Total Slots</div>
+        <div class="metric-value" id="metric-total-slots">--</div>
+        <div class="metric-footer">Across all scheduled dates</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Available Slots</div>
+        <div class="metric-value" style="color: var(--status-available);" id="metric-available-slots">--</div>
+        <div class="metric-footer">Ready for immediate booking</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Confirmed Bookings</div>
+        <div class="metric-value" style="color: var(--accent-cyan);" id="metric-booked-slots">--</div>
+        <div class="metric-footer">Active customer reservations</div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-label">Double-Booking Guard</div>
+        <div class="metric-value" style="color: #a855f7; font-size: 1.5rem; margin-top: 0.35rem;">InnoDB Locked</div>
+        <div class="metric-footer">Atomic row locking enabled</div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs-navigation" role="tablist">
+      <button class="tab-btn active" data-tab="tab-slots" role="tab" aria-selected="true">
+        📅 Available Slots
+        <span class="tab-badge" id="badge-available-count">0</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-bookings" role="tab" aria-selected="false">
+        📋 View Bookings
+        <span class="tab-badge" id="badge-bookings-count">0</span>
+      </button>
+      <button class="tab-btn" data-tab="tab-create" role="tab" aria-selected="false">
+        ➕ Create Slots
+      </button>
+      <button class="tab-btn" data-tab="tab-concurrency" role="tab" aria-selected="false">
+        ⚡ Concurrency Tester
+      </button>
+    </nav>
+
+    <!-- TAB 1: AVAILABLE SLOTS -->
+    <main id="tab-slots" class="tab-pane active" role="tabpanel">
+      <!-- Controls / Filter Bar -->
+      <div class="controls-bar">
+        <div class="controls-left">
+          <div class="control-group">
+            <span class="control-label">Filter Date:</span>
+            <input type="date" id="filter-date-input" class="input-control">
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-quick-today">Today</button>
+          <button class="btn btn-secondary btn-sm" id="btn-quick-tomorrow">Tomorrow</button>
+          <button class="btn btn-secondary btn-sm" id="btn-quick-all">Clear Filter</button>
+        </div>
+
+        <div class="controls-right">
+          <div class="control-group">
+            <span class="control-label">Status:</span>
+            <select id="filter-status-select" class="select-control">
+              <option value="AVAILABLE">Available Only</option>
+              <option value="ALL">All Slots (incl. Booked)</option>
+              <option value="BOOKED">Booked Only</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Slots Grid -->
+      <div class="slots-grid" id="slots-grid-container">
+        <!-- Dynamic Slot Cards will be rendered here -->
+        <div class="empty-state">
+          <div class="empty-icon">⏳</div>
+          <h3 class="empty-title">Loading Appointment Slots...</h3>
+          <p class="empty-desc">Connecting to backend service...</p>
+        </div>
+      </div>
+    </main>
+
+    <!-- TAB 2: VIEW BOOKINGS -->
+    <section id="tab-bookings" class="tab-pane" role="tabpanel">
+      <div class="controls-bar">
+        <div class="controls-left">
+          <input type="text" id="search-bookings-input" class="input-control" placeholder="Search customer name, email, or phone..." style="min-width: 320px;">
+        </div>
+        <div class="controls-right">
+          <select id="filter-booking-status" class="select-control">
+            <option value="">All Statuses</option>
+            <option value="CONFIRMED" selected>Confirmed Only</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="bookings-container" id="bookings-list-container">
+        <!-- Dynamic Bookings will be rendered here -->
+      </div>
+    </section>
+
+    <!-- TAB 3: CREATE SLOTS -->
+    <section id="tab-create" class="tab-pane" role="tabpanel">
+      <div class="admin-grid">
+        <!-- Single Slot Creator -->
+        <div class="form-card">
+          <h3 class="form-title">Create Single Slot</h3>
+          <p class="form-desc">Add an individual appointment slot for a specific date and time interval.</p>
+          
+          <form id="form-create-slot">
+            <div class="form-group">
+              <label for="slot-date">Date</label>
+              <input type="date" id="slot-date" class="input-control" required>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="slot-start-time">Start Time</label>
+                <input type="time" id="slot-start-time" class="input-control" value="09:00" required>
+              </div>
+              <div class="form-group">
+                <label for="slot-end-time">End Time</label>
+                <input type="time" id="slot-end-time" class="input-control" value="09:30" required>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;" id="btn-submit-single-slot">
+              ➕ Add Appointment Slot
+            </button>
+          </form>
+        </div>
+
+        <!-- Batch Generator -->
+        <div class="form-card">
+          <h3 class="form-title">Batch Working Day Generator</h3>
+          <p class="form-desc">Quickly generate recurring appointment slots for an entire working day in intervals.</p>
+          
+          <form id="form-batch-slots">
+            <div class="form-group">
+              <label for="batch-date">Target Date</label>
+              <input type="date" id="batch-date" class="input-control" required>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="batch-start-hour">Start Hour</label>
+                <select id="batch-start-hour" class="select-control">
+                  <option value="8">8:00 AM</option>
+                  <option value="9" selected>9:00 AM</option>
+                  <option value="10">10:00 AM</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="batch-end-hour">End Hour</label>
+                <select id="batch-end-hour" class="select-control">
+                  <option value="16">4:00 PM</option>
+                  <option value="17" selected>5:00 PM</option>
+                  <option value="18">6:00 PM</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="batch-duration">Slot Duration (Minutes)</label>
+              <select id="batch-duration" class="select-control">
+                <option value="15">15 Minutes</option>
+                <option value="30" selected>30 Minutes</option>
+                <option value="45">45 Minutes</option>
+                <option value="60">60 Minutes</option>
+              </select>
+            </div>
+
+            <button type="submit" class="btn btn-secondary" style="width: 100%;" id="btn-submit-batch-slots">
+              ⚡ Generate Working Day Slots
+            </button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: CONCURRENCY & RACE CONDITION TESTER -->
+    <section id="tab-concurrency" class="tab-pane" role="tabpanel">
+      <div class="concurrency-box">
+        <div class="concurrency-header">
+          <div>
+            <span class="concurrency-badge">Concurrency & Race Condition Validator</span>
+            <h2 style="font-size: 1.5rem; margin-top: 0.5rem;">Double-Booking Prevention Test</h2>
+            <p style="color: var(--text-muted); font-size: 0.88rem; max-width: 650px; margin-top: 0.35rem;">
+              Simulate two customers attempting to book the <strong>exact same appointment slot at the exact same millisecond</strong>.
+              The backend uses MySQL InnoDB row-level locking (<code>SELECT ... FOR UPDATE</code>) to ensure exactly one succeeds (201) while the other is rejected (409 Conflict).
+            </p>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; margin-top: 1.25rem;">
+          <div class="control-group" style="flex-direction: column; align-items: flex-start; flex-grow: 1;">
+            <label for="sim-slot-select" class="control-label">Select Target Available Slot:</label>
+            <select id="sim-slot-select" class="select-control" style="width: 100%; min-width: 280px;">
+              <option value="">Loading available slots...</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="btn-run-race-sim" style="background: var(--accent-gradient);">
+            🚀 Launch 2 Simultaneous Bookings
+          </button>
+        </div>
+
+        <div class="sim-output" id="sim-output-console">
+          <div class="sim-log-item sim-log-info">
+            [Ready] Select an available slot above and click "Launch 2 Simultaneous Bookings" to run the test.
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- BOOKING MODAL -->
+  <div class="modal-backdrop" id="modal-booking">
+    <div class="modal-card">
+      <button class="modal-close-btn" id="btn-close-booking-modal">&times;</button>
+      <h2 class="modal-title">Book Appointment</h2>
+      <p class="modal-subtitle">Reserve this slot. Once confirmed, it is locked immediately.</p>
+
+      <div class="modal-slot-preview" id="modal-slot-details">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <form id="form-confirm-booking">
+        <input type="hidden" id="booking-slot-id">
+
+        <div class="form-group">
+          <label for="customer-name">Customer Name *</label>
+          <input type="text" id="customer-name" class="input-control" placeholder="e.g. Eleanor Vance" required>
+        </div>
+
+        <div class="form-group">
+          <label for="customer-email">Email Address</label>
+          <input type="email" id="customer-email" class="input-control" placeholder="e.g. eleanor@example.com">
+        </div>
+
+        <div class="form-group">
+          <label for="customer-phone">Phone Number</label>
+          <input type="tel" id="customer-phone" class="input-control" placeholder="e.g. +1 555-0142">
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" id="btn-cancel-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="flex: 2;" id="btn-submit-booking">Confirm Booking</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- CANCELLATION CONFIRMATION MODAL -->
+  <div class="modal-backdrop" id="modal-cancel-confirm">
+    <div class="modal-card">
+      <button class="modal-close-btn" id="btn-close-cancel-modal">&times;</button>
+      <h2 class="modal-title" style="color: var(--status-booked);">Cancel Appointment?</h2>
+      <p class="modal-subtitle">Are you sure you want to cancel this booking? The slot will be released and returned to AVAILABLE status immediately.</p>
+
+      <div class="modal-slot-preview" id="modal-cancel-details">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div style="display: flex; gap: 0.75rem; margin-top: 1.5rem;">
+        <button type="button" class="btn btn-secondary" style="flex: 1;" id="btn-abort-cancel">Keep Booking</button>
+        <button type="button" class="btn btn-danger" style="flex: 2;" id="btn-confirm-cancel-action">Yes, Cancel Booking</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Application Logic -->
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,374 @@
+{
+  "info": {
+    "_postman_id": "a93df530-81e0-4a82-9f33-appointment-booker",
+    "name": "Appointment Slot Booker API",
+    "description": "Complete REST API collection for Appointment Slot Booker. Includes tests for listing slots, creating slots, booking appointments, strict double-booking prevention (409 Conflict), viewing bookings, and cancelling bookings.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:5000",
+      "type": "string"
+    },
+    {
+      "key": "slot_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "booking_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/health",
+          "host": ["{{base_url}}"],
+          "path": ["api", "health"]
+        },
+        "description": "Verify that backend service and database connection are active and healthy."
+      },
+      "response": []
+    },
+    {
+      "name": "1. List Available Slots",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Has slots array\", function () {",
+              "    pm.expect(jsonData).to.have.property('slots');",
+              "});",
+              "if (jsonData.slots && jsonData.slots.length > 0) {",
+              "    pm.collectionVariables.set(\"slot_id\", jsonData.slots[0].id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/slots?status=AVAILABLE",
+          "host": ["{{base_url}}"],
+          "path": ["slots"],
+          "query": [
+            {
+              "key": "status",
+              "value": "AVAILABLE"
+            }
+          ]
+        },
+        "description": "Retrieve all open/available appointment slots."
+      },
+      "response": []
+    },
+    {
+      "name": "2. List All Slots (Available & Booked)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/slots?all=true",
+          "host": ["{{base_url}}"],
+          "path": ["slots"],
+          "query": [
+            {
+              "key": "all",
+              "value": "true"
+            }
+          ]
+        },
+        "description": "Retrieve all slots regardless of booking status."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Create a New Slot",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Set date to tomorrow dynamically",
+              "const tomorrow = new Date();",
+              "tomorrow.setDate(tomorrow.getDate() + 1);",
+              "const yyyy = tomorrow.getFullYear();",
+              "const mm = String(tomorrow.getMonth() + 1).padStart(2, '0');",
+              "const dd = String(tomorrow.getDate()).padStart(2, '0');",
+              "pm.variables.set(\"slot_target_date\", `${yyyy}-${mm}-${dd}`);"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Slot created successfully (201)\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "var jsonData = pm.response.json();",
+              "if (jsonData.slot && jsonData.slot.id) {",
+              "    pm.collectionVariables.set(\"slot_id\", jsonData.slot.id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"date\": \"{{slot_target_date}}\",\n  \"start_time\": \"17:00\",\n  \"end_time\": \"17:30\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/slots",
+          "host": ["{{base_url}}"],
+          "path": ["slots"]
+        },
+        "description": "Create an appointment slot."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Book an Available Slot",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Booking confirmed successfully (201)\", function () {",
+              "    pm.response.to.have.status(201);",
+              "});",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Returns booking object\", function () {",
+              "    pm.expect(jsonData).to.have.property('booking');",
+              "    pm.expect(jsonData.booking.booking_status).to.eql('CONFIRMED');",
+              "});",
+              "if (jsonData.booking && jsonData.booking.id) {",
+              "    pm.collectionVariables.set(\"booking_id\", jsonData.booking.id);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"slot_id\": {{slot_id}},\n  \"customer_name\": \"Alexander Wright\",\n  \"customer_email\": \"alex.wright@example.com\",\n  \"customer_phone\": \"+1 555-0199\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/bookings",
+          "host": ["{{base_url}}"],
+          "path": ["bookings"]
+        },
+        "description": "Book a specific available slot by ID."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Prevent Double-Booking (Expect 409 Conflict)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Double-booking rejected with 409 Conflict\", function () {",
+              "    pm.response.to.have.status(409);",
+              "});",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Contains error message about reservation conflict\", function () {",
+              "    pm.expect(jsonData.error).to.include(\"Double-booking is strictly prohibited\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"slot_id\": {{slot_id}},\n  \"customer_name\": \"Second User Attempting Same Slot\",\n  \"customer_email\": \"second.user@example.com\",\n  \"customer_phone\": \"+1 555-0999\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/bookings",
+          "host": ["{{base_url}}"],
+          "path": ["bookings"]
+        },
+        "description": "Attempts to book the exact same slot that was just reserved in Request #4. The backend MUST reject this with 409 Conflict."
+      },
+      "response": []
+    },
+    {
+      "name": "6. View Bookings",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Bookings array returned\", function () {",
+              "    pm.expect(jsonData).to.have.property('bookings');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/bookings",
+          "host": ["{{base_url}}"],
+          "path": ["bookings"]
+        },
+        "description": "Display all booked appointments along with customer and slot information."
+      },
+      "response": []
+    },
+    {
+      "name": "7. Cancel a Booking (Release Slot)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Booking cancelled successfully (200)\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Booking status changed to CANCELLED\", function () {",
+              "    pm.expect(jsonData.booking.booking_status).to.eql('CANCELLED');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/bookings/{{booking_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["bookings", "{{booking_id}}"]
+        },
+        "description": "Cancel an appointment booking and automatically release the reserved slot back to AVAILABLE."
+      },
+      "response": []
+    },
+    {
+      "name": "8. Validation: Reject Past Date Slot (Expect 400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Past date rejected with 400 Bad Request\", function () {",
+              "    pm.response.to.have.status(400);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"date\": \"2020-01-01\",\n  \"start_time\": \"09:00\",\n  \"end_time\": \"09:30\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/slots",
+          "host": ["{{base_url}}"],
+          "path": ["slots"]
+        },
+        "description": "Tests validation rule: rejecting appointment slots in the past."
+      },
+      "response": []
+    },
+    {
+      "name": "9. Validation: Reject Empty Customer Name (Expect 400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Empty customer name rejected with 400 Bad Request\", function () {",
+              "    pm.response.to.have.status(400);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"slot_id\": 1,\n  \"customer_name\": \"   \"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/bookings",
+          "host": ["{{base_url}}"],
+          "path": ["bookings"]
+        },
+        "description": "Tests validation rule: customer_name is required and cannot be whitespace."
+      },
+      "response": []
+    }
+  ]
+}
